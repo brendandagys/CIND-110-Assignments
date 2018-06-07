@@ -1,0 +1,296 @@
+---
+title: "cind110_Assignment_03"
+author: "Brendan Dagys"
+date: "March 10, 2018"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+classoption: landscape
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document.
+
+This assignment makes use of data that is provided by:
+"https://raw.githubusercontent.com/ansymo/msr2013-bug_dataset/master/data/v02/mozilla/bug_status.json"
+
+#Installing rmongodb from Archive
+```{r}
+# Download package tarball from CRAN archive
+
+url <- "https://cran.r-project.org/src/contrib/Archive/rmongodb/rmongodb_1.8.0.tar.gz"
+pkgFile <- "rmongodb_1.8.0.tar.gz"
+download.file(url = url, destfile = pkgFile)
+
+# Install dependencies
+
+install.packages(c("plyr", "jsonlite"))
+
+# Install package
+install.packages(pkgs=pkgFile, type="source", repos=NULL)
+```
+
+#Helper functions to connect to Mongodb Server
+```{r}
+library(rmongodb)
+DATABASE <- "Mozilla_DB"
+NS <- "Mozilla_DB.posts"
+mongo_find <- function (query,sort,fields) {
+  if(missing(sort)) {
+    sort <- mongo.bson.from.JSON('{}')
+  }
+  if(missing(fields)) {
+    fields <- mongo.bson.from.JSON('{}')
+  }
+  # creating DB connection object with rmongodb package
+  m1 <- mongo.create(db=DATABASE)
+  #For more details, type below command on shell:
+  #help(mongo.create)
+
+  # send Query to btain the result set
+  cursor <- mongo.find(m1, NS, query,sort, fields ,limit=10L)
+
+  # print elements from result sets 
+  while (mongo.cursor.next(cursor))
+    print(mongo.cursor.value(cursor))
+
+  # close db connection, saving output in x to avoid printing the disconnect message
+  x <- mongo.disconnect(m1)
+}
+
+mongo_find_count <- function (query) {
+
+  # creating DB connection object with rmongodb package
+  m1 <- mongo.create(db=DATABASE)
+  #For more details, type below command on shell:
+  #help(mongo.create)
+
+  # send Query to btain result set
+  print(mongo.count(m1, NS, query))
+
+  # close db connection, saving output in x to avoid printing the disconnect message
+  x <- mongo.disconnect(m1)
+}
+```
+
+#Example_1
+show databases;
+```{r}
+#creating connection
+m1 <- mongo.create(db=DATABASE)
+
+mongo.get.databases(m1)
+#For more details, type below command on shell:
+#help(mongo.get.databases)
+
+#disconnecting
+disconnect_msg <- mongo.disconnect(m1)
+```
+
+#Example_2
+find one object (i.e one bug report) that exists in 'Mozilla_DB.posts' collection
+```{r}
+#creating connection
+m1 <- mongo.create(db=DATABASE)
+mongo.find.one(m1,NS)
+#For more details, type below command on shell:
+#help(mongo.find.one)
+
+#disconnecting
+disconnect_msg <- mongo.disconnect(m1)
+```
+
+#Example_3
+Find the bug report where its id equals to 501091 (i.e. b_id = 501091)
+```{r}
+query <- mongo.bson.from.JSON('{"b_id": "501091"}')
+
+mongo_find(query)
+```
+
+#Q1
+Count the total number of objects (i.e. bug reports) in "Mozilla_DB.post" collection.
+```{r}
+#creating connection
+m1 <- mongo.create(db=DATABASE)
+
+#Write your solution here.
+#Help: use count function
+#For more details, type below command on shell:
+#help(mongo.count)
+mongo.count(m1, NS)
+
+#disconnecting
+disconnect_msg <- mongo.disconnect(m1)
+```
+
+#Q2
+Display a list of all distinct values of the "what" attribute in "Mozilla_DB.posts" collection.
+```{r}
+#creating connection
+m1 <- mongo.create(db=DATABASE)
+
+#Write your solution here.
+#Help: use distinct function
+#For more details, type below command on shell:
+#help(mongo.distinct)
+mongo.distinct(m1, NS, "value.what")
+
+#disconnecting
+disconnect_msg <- mongo.disconnect(m1)
+```
+
+#Q3
+How many objects in "Mozilla_DB.posts" collection have a status equal to "CLOSED"? 
+Hint: Status here is the "what" attribute
+```{r}
+#Update below  query
+query <- mongo.bson.from.JSON('{"value.what": "CLOSED"}')
+
+mongo_find_count(query)
+```
+
+#Q4
+Display a list of all bug reports where the timestamp (i.e. the "when" attribute) is greater than 1250739410.
+```{r}
+#Update below  query
+#query <- mongo.bson.from.JSON('{"value.when": {"$gt": 1250739410}}')
+
+#QUERY WHERE ALL ELEMENTS MATCH THE CONDITION:
+query <- mongo.bson.from.JSON('{"$nor": [{"value.when": {"$lte": 1250739410}}]}')
+
+mongo_find(query)
+```
+
+#Q5
+Find documents where attributes "when" (time-stamp) is greater than 1268734163 OR "what" (bug status) is CLOSED OR the ID of the developer is less then or equal to 310130
+```{r}
+#Update below  query
+query <- mongo.bson.from.JSON('{"$or": [{"value.when": {"$gt": 1268734163}}, {"value.what": "CLOSED"}, {"value.who": {"$lte": 310130}}]}')
+
+mongo_find(query)
+```
+
+#Q6
+Find all bug reports that has not been CLOSED
+```{r}
+#Update below  query
+query <- mongo.bson.from.JSON('{"value.what": {"$ne": "CLOSED"}}')
+
+mongo_find(query)
+```
+
+#Q7
+Fetch only the ID of the bugs that have been RESOLVED.
+```{r}
+#Update below  query and fields
+query <- mongo.bson.from.JSON('{"value.what": "RESOLVED"}')
+
+fields <- mongo.bson.from.JSON('{"b_id": 1, "_id": 0}')
+
+mongo_find(query, fields = fields)
+```
+
+#Q8
+Insert the following document into Mozilla_DB.posts collection
+{
+	"b_id" : "1111111",
+	"value" : [
+		{
+			"what" : "NEW",
+			"who" : 6254,
+			"when" : 1250739410
+		}
+	]
+}
+```{r}
+#creating connection
+m1 <- mongo.create(db=DATABASE)
+
+#Write your solution here.
+#update below insert statement
+mongo.insert(m1, NS, '{"b_id": "1111111", "value": [{"what": "NEW", "who": 6254, "when": 1250739410}]}')
+
+#check if inserted
+query <- mongo.bson.from.JSON('{"b_id": "1111111"}')
+
+mongo_find(query)
+#disconnecting
+disconnect_msg <- mongo.disconnect(m1)
+```
+
+#Q9
+Remove all documents with "b_id" equals to "1111111".
+```{r}
+#creating connection
+m1 <- mongo.create(db=DATABASE)
+
+#Write your solution here.
+#update below insert statement
+mongo.remove(m1,NS, '{"b_id": "1111111"}')
+
+#check if deleted
+query <- mongo.bson.from.JSON('{"b_id": "1111111"}')
+
+mongo_find(query)
+#disconnecting
+disconnect_msg <- mongo.disconnect(m1)
+```
+
+#Q10
+Update all Documents with b_id equals to "501091" as below.
+
+
+BEFORE:
+
+
+{
+	value : 4 	 
+		0 : 3 	 
+			what : 2 	 NEW
+			who : 16 	 5490
+			when : 16 	 1246241902
+		1 : 3 	 
+			what : 2 	 RESOLVED
+			who : 16 	 5490
+			when : 16 	 1246328569
+	b_id : 2 	 501091
+}
+
+
+AFTER:
+
+{
+	"b_id" : "501091",
+	"value" : [
+		{
+			"what" : "NEW",
+			"who" : 6254,
+			"when" : 1250739410
+		}
+	]
+}
+```{r}
+#creating connection
+m1 <- mongo.create(db=DATABASE)
+
+#Write your solution here.
+#update below insert statement
+mongo.update(m1,NS, '{"b_id": "501091"}', '{"b_id": "501091", "value": [{"what": "NEW", "who": 6254, "when": 1250739410}]}')
+
+#check if updated
+query <- mongo.bson.from.JSON('{"b_id": "501091"}')
+
+mongo_find(query)
+#disconnecting
+disconnect_msg <- mongo.disconnect(m1)
+```
