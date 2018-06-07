@@ -1,0 +1,138 @@
+---
+title: "cind110_Assignment_02"
+author: "Brendan Dagys"
+date: "February 28, 2018"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document.
+
+This assignment makes use of data provided in Assignment_01
+
+
+#Setting the working diectory and the connection to MYSQL Server
+```{r}
+#setwd("/Google Drive/Winter2018/CIND110")
+#getwd()
+#install.packages('RMySQL', dependencies = TRUE)
+library(RMySQL)
+sqlQuery <- function (query) {
+
+  # creating DB connection object with RMysql package
+  DB <- dbConnect(MySQL(), user='root', password='data', dbname='gm_eclipse',
+        host='127.0.0.1')
+
+  # send Query to btain result set
+  rs <- dbSendQuery(DB, query)
+
+  # get elements from result sets and convert to dataframe
+  result <- fetch(rs, -1)
+
+  # close db connection
+  dbDisconnect(DB)
+
+  # return the dataframe
+  return(result)
+}
+```
+
+#Example 1
+Query the total number of changes where state is ABANDONED.
+```{r}
+sqlQuery("SELECT COUNT(*), ch_status FROM t_change where ch_status='ABANDONED';")
+```
+
+#Example 2
+Query all the RECENT reviews which has 'Code-Review-2' string; which essentially means that the code(patch) was rejected. List ID and time created, and limit the query output by 20 records.
+```{r}
+sqlQuery("SELECT hist_id, hist_createdTime FROM t_history 
+WHERE hist_message LIKE '%Code-Review-2%' 
+ORDER BY hist_createdTime DESC limit 20;")
+```
+
+#Example 3
+Find the total lines of code that has been inserted to 'SystemClock.java' file across all revisons.
+```{r}
+sqlQuery("select f_fileName,sum(f_linesInserted) as InsLOC from t_file 
+WHERE f_fileName LIKE '%/SystemClock.java%'
+Group by f_fileName;")
+```
+
+#Q1
+For each file in the database, find the total Lines of code that has been deleted during the second revision
+```{r}
+sqlQuery("SELECT f_fileName File_Name, f_linesDeleted Lines_Deleted FROM t_file WHERE f_revisionId = 2;")
+```
+
+#Q2
+Display the most frequently updated files that have been modified at least 200 times.
+```{r}
+sqlQuery("SELECT f_fileName File_Name, COUNT(*) Number_of_Modifications FROM t_file GROUP BY f_fileName HAVING COUNT(f_fileName) >= 200 ORDER BY Number_of_Modifications DESC")
+```
+
+#Q3
+Display the total number of history messages, that have been provided by a reviewer with Author Account ID equals to "442"?.
+```{r}
+sqlQuery("SELECT count(hist_message) Messages_of_ID_442 FROM t_history WHERE hist_authorAccountId = 442;")
+```
+
+#Q4
+Display the information of the most active reviewers who provided more than 1000 comments (i.e. history messeges). List the name, account-ID and the total number of comments.
+```{r}
+sqlQuery("SELECT p_name Name, hist_authorAccountId Account_ID, count(*) Total_Comments FROM t_people, t_history WHERE hist_authorAccountId = p_accountId GROUP BY hist_authorAccountId, p_name HAVING count(*) > 1000 ORDER BY Total_Comments DESC;")
+```
+
+#Q5
+Display the most recent 20 changes with status "MERGED"" in descending order.
+List ChangeIdNum, Project, Branch , and CreatedTime
+```{r}
+sqlQuery("SELECT ch_changeIdNum Change_ID_Number, ch_project Project, ch_branch Branch, ch_createdTime Created_Time FROM t_change WHERE ch_status = 'MERGED' ORDER BY ch_updatedTime DESC LIMIT 20;")
+```
+
+#Q6
+Display the names of the top 10 users who have submitted the maximum number of revision-messages in one revision-change.
+```{r}
+sqlQuery("SELECT rev_changeId Change_ID, rev_authorUsername Name, count(*) Message_Count_Per_Change FROM t_revision GROUP BY rev_changeId, rev_authorUsername ORDER BY Message_Count_Per_Change DESC LIMIT 10;")
+```
+
+#Q7
+Display the status, id, and the comment-message of a change whose reviewer created the message during November 2016; limit by 10.
+```{r}
+sqlQuery("SELECT ch_status Status, ch_changeIdNum Change_ID, hist_message Comment_Message FROM t_change, t_history WHERE ch_changeIdNum = hist_changeId AND hist_createdTime LIKE '2016-11%' LIMIT 10;")
+```
+
+#Q8
+List the id number and the status of all merge-able changes committed by 'Shawn Pearce';
+```{r}
+sqlQuery("SELECT ch_changeIdNum Change_ID, ch_status Status FROM t_change, t_people WHERE p_name = 'Shawn Pearce' AND ch_mergeable = 1 AND ch_authorAccountID = p_accountId;")
+```
+
+#Q9
+List the id number from t_file where there are more than 3000 lines deleted and more than 2000 lines inserted.
+```{r}
+sqlQuery("SELECT id, f_linesInserted, f_linesDeleted FROM t_file WHERE f_linesInserted > 2000 AND f_linesDeleted > 3000;")
+```
+
+#Q10
+Issue a select statement with t_change natural join with t_revision with a limit of 10 records.
+Explain what natural join did to the rows, does it make sense? and explain the difference between natural join and inner join.
+```{r}
+sqlQuery("SELECT * FROM t_change NATURAL JOIN t_revision LIMIT 10;")
+
+#The natural join is a join with an implicit equijoin join condition, specified on all columns with the same name between the two relations. Because both t_change and t_revision had 'id' columns, there are 15,887 rows returned by this natural join (the number of rows in t_change, the shorter relation). Because t_revision is longer, its rows past 15,887 had no match and were not included. Similarly, because only one column matched between the two relations, and in a natural join the superfluous columns are discarded, the result has a number of columns equal to the sum of columns in both relations, minus 1 (26).
+
+#This result does not make sense, as the equated rows are those with the same value for 'id.' Even if the ID value in t_change equals that of t_revision, they will not necessarily be equating a revision to the change that it belongs to. Ideally, we would want to combine tuples based on the change ID (and the corresponding change ID foreign key in t_revision) so that multiple revisions could be related to their parent change.
+
+#An inner join is different from a natural join in that the inner join condition does not have to be an equijoin on columns with the same name. The join condition may be a comparison operator as well. Last, inner joins do not remove superfluous columns; the number of columns in the resulting relation is the sum of the columns in both relations being joined.
+
+```
